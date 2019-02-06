@@ -1,3 +1,33 @@
+#! /usr/bin/env python
+
+###############################################################################
+# pendulum.py
+#
+# Edits to pendulum.py example script. Commenting to add clarity (mostly for myself)
+# 
+# Original repository links:
+#  * https://locuslab.github.io/mpc.pytorch/
+#  * https://github.com/locuslab/mpc.pytorch
+#  * https://arxiv.org/abs/1703.00443
+#  * https://arxiv.org/abs/1810.13400
+# 
+#
+# NOTE: Any plotting is set up for output, not viewing on screen.
+#       So, it will likely be ugly on screen. The saved PDFs should look
+#       better.
+#
+# Created: 02/06/19
+#   - Joshua Vaughan
+#   - joshua.vaughan@louisiana.edu
+#   - http://www.ucs.louisiana.edu/~jev9637
+#
+# Modified:
+#   * 
+#
+# TODO:
+#   * 
+###############################################################################
+
 import torch
 from torch.autograd import Function, Variable
 import torch.nn.functional as F
@@ -13,33 +43,48 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-plt.style.use('bmh')
+# plt.style.use('bmh') - Commented to use default CRAWLAB styling
 
 class PendulumDx(nn.Module):
     def __init__(self, params=None, simple=True):
         super().__init__()
         self.simple = simple
 
-        self.max_torque = 2.0
-        self.dt = 0.05
-        self.n_state = 3
-        self.n_ctrl = 1
+        self.max_torque = 2.0       # Max torque on pendulum
+        self.dt = 0.05              # Time-step (s)
+        self.n_state = 3            # Number of system states cos(theta), sin(theta), theta_dot
+        self.n_ctrl = 1             # Number of control inputs - torque at joint
 
         if params is None:
             if simple:
                 # gravity (g), mass (m), length (l)
+                # TODO: 02/06/19 - make m and l parameters variables
                 self.params = Variable(torch.Tensor((10., 1., 1.)))
             else:
                 # gravity (g), mass (m), length (l), damping (d), gravity bias (b)
+                # TODO: 02/06/19 - JEV - make parameters variables
+                #                        What do they mean by gravity bias?
                 self.params = Variable(torch.Tensor((10., 1., 1., 0., 0.)))
         else:
             self.params = params
 
         assert len(self.params) == 3 if simple else 5
 
-        self.goal_state = torch.Tensor([1., 0., 0.])
+        # Goal is:
+        #    cos(theta) = 1, theta = n*pi
+        #    sin(theta) = 0, theta = n*pi
+        #    theta_dot = 0
+        self.goal_state = torch.Tensor([1., 0., 0.])        
+
+        # Equal weighting on two position states and 1/10 of that on velocity
         self.goal_weights = torch.Tensor([1., 1., 0.1])
+        
+        # Penalty on input magnitude
         self.ctrl_penalty = 0.001
+        
+        # Upper and lower limits on inputs
+        # TODO: 02/06/19 - JEV - Should this be +/- self.max_torque?
+        #                        They seem to not be used elsewhere. Can we delete?
         self.lower, self.upper = -2., 2.
 
         self.mpc_eps = 1e-3
@@ -47,36 +92,64 @@ class PendulumDx(nn.Module):
         self.max_linesearch_iter = 5
 
     def forward(self, x, u):
+        """ 
+        This forward pass seems to just mostly implement the equations of motion for the
+        system.
+        
+        Arguments:
+          x : State vector as pytorch tensor
+          u : input vector
+          
+        Returns:
+          Updated state vector as pytorch tensor
+        """
+        
         squeeze = x.ndimension() == 1
 
         if squeeze:
             x = x.unsqueeze(0)
             u = u.unsqueeze(0)
 
+        # Check the all the dimensions are correct, raise an AssertionError if not
         assert x.ndimension() == 2
         assert x.shape[0] == u.shape[0]
         assert x.shape[1] == 3
         assert u.shape[1] == 1
         assert u.ndimension() == 2
 
+        # Check if running on GPU with CUDA
         if x.is_cuda and not self.params.is_cuda:
             self.params = self.params.cuda()
 
+        # Unpack the parameters, depending on whether we're using the simple system or not
         if not hasattr(self, 'simple') or self.simple:
             g, m, l = torch.unbind(self.params)
         else:
             g, m, l, d, b = torch.unbind(self.params)
 
+        # Limit the control input inside the +/- self.max_torque bounds
         u = torch.clamp(u, -self.max_torque, self.max_torque)[:,0]
+        
+        # Parse out the states from the current state vector
         cos_th, sin_th, dth = torch.unbind(x, dim=1)
         th = torch.atan2(sin_th, cos_th)
+        
+        # TODO: 02/06/19 - JEV - What odes the 3 in these equations come from?
         if not hasattr(self, 'simple') or self.simple:
+            # simple inverted pendulum
             newdth = dth + self.dt*(-3.*g/(2.*l) * (-sin_th) + 3. * u / (m*l**2))
-        else:
+
+        else: 
+            # Include damping and gravity bias
             sin_th_bias = torch.sin(th + b)
             newdth = dth + self.dt*(
                 -3.*g/(2.*l) * (-sin_th_bias) + 3. * u / (m*l**2) - d*th)
+
+        # Use the calculated theta_dot to calculate the new theta
+        # theta = old_theta + theta_dot * dt
         newth = th + newdth*self.dt
+        
+        # Pack the new states
         state = torch.stack((torch.cos(newth), torch.sin(newth), newdth), dim=1)
 
         if squeeze:
@@ -122,6 +195,7 @@ if __name__ == '__main__':
     xinit[:,0] = np.cos(0)
     xinit[:,1] = np.sin(0)
     x = xinit
+    
     for t in range(T):
         x = dx(x, u[t])
         fig, ax = dx.get_frame(x[0])
@@ -137,5 +211,6 @@ if __name__ == '__main__':
         vid_file
     )
     os.system(cmd)
+    
     for t in range(T):
         os.remove('{:03d}.png'.format(t))

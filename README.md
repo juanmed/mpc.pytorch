@@ -22,3 +22,7 @@ and
 + [More details are available on our project website here](http://locuslab.github.io/mpc.pytorch)
 + This is still an early alpha release, be prepared for some rough
   spots and get in touch if you have any questions!
+
+
+# Fork by the <span style="font-family: 'Fugaz One', cursive;">C.R.A.W.LAB</span>
+Mostly additional commenting for our understanding, so far (as of 02/06/19).
