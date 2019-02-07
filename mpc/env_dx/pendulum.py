@@ -122,28 +122,30 @@ class PendulumDx(nn.Module):
             self.params = self.params.cuda()
 
         # Unpack the parameters, depending on whether we're using the simple system or not
+        # We generally won't need this unless we have two models bundled into the same class, 
+        # which itself is probably bas practice.
         if not hasattr(self, 'simple') or self.simple:
             g, m, l = torch.unbind(self.params)
         else:
             g, m, l, d, b = torch.unbind(self.params)
 
         # Limit the control input inside the +/- self.max_torque bounds
-        u = torch.clamp(u, -self.max_torque, self.max_torque)[:,0]
+        u_clamped = torch.clamp(u, -self.max_torque, self.max_torque)[:,0]
         
         # Parse out the states from the current state vector
         cos_th, sin_th, dth = torch.unbind(x, dim=1)
         th = torch.atan2(sin_th, cos_th)
         
-        # TODO: 02/06/19 - JEV - What odes the 3 in these equations come from?
+        # TODO: 02/06/19 - JEV - What odes the 3 in these equations come from? <- they are using rigid bar, not point mass  
         if not hasattr(self, 'simple') or self.simple:
             # simple inverted pendulum
-            newdth = dth + self.dt*(-3.*g/(2.*l) * (-sin_th) + 3. * u / (m*l**2))
+            newdth = dth + self.dt*(-3.*g/(2.*l) * (-sin_th) + 3. * u_clamped / (m*l**2))
 
         else: 
             # Include damping and gravity bias
             sin_th_bias = torch.sin(th + b)
             newdth = dth + self.dt*(
-                -3.*g/(2.*l) * (-sin_th_bias) + 3. * u / (m*l**2) - d*th)
+                -3.*g/(2.*l) * (-sin_th_bias) + 3. * u_clamped / (m*l**2) - d*th)
 
         # Use the calculated theta_dot to calculate the new theta
         # theta = old_theta + theta_dot * dt
@@ -157,6 +159,8 @@ class PendulumDx(nn.Module):
         return state
 
     def get_frame(self, x, ax=None):
+        """ Get a frame to use in generating a video of the results """
+        
         x = util.get_data_maybe(x.view(-1))
         assert len(x) == 3
         l = self.params[2].item()
