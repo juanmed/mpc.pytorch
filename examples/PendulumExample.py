@@ -40,7 +40,6 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-
 if __name__ == '__main__':
     params = torch.Tensor((9.81, 1., 1.))
     dx = PendulumDx(params, simple=True)
@@ -88,8 +87,6 @@ if __name__ == '__main__':
         p = p.unsqueeze(0).repeat(mpc_T, n_batch, 1)
 
     for t in tqdm(range(T)):
-#         import pdb
-#         pdb.set_trace()
         nominal_states, nominal_actions, nominal_objs = mpc.MPC(
             dx.n_state, dx.n_ctrl, mpc_T,
             u_init=u_init,
@@ -107,6 +104,12 @@ if __name__ == '__main__':
         next_action = nominal_actions[0]
         u_init = torch.cat((nominal_actions[1:], torch.zeros(1, n_batch, dx.n_ctrl)), dim=0)
         u_init[-2] = u_init[-3]
+        
+        # Calling the module causes the function forward to be called, while
+        # taking care of running registered hooks. See:
+        #   https://pytorch.org/docs/stable/nn.html#torch.nn.Module.forward
+        # For the system here, the equations of motion are run in the forward
+        # pass, so this basically just updates the states for the next timestep.
         x = dx(x, next_action)
 
 
