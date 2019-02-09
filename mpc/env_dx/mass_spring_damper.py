@@ -57,15 +57,15 @@ class MassSpringDamperDx(nn.Module):
         
         # Set the maximum force for the control input (N)
         # TODO: 02/09/19 - We should probably include this as a parameter
-        self.max_force = 200.0
+        self.max_force = 20.0
 
         if params is None:
             if simple:
                 # m (kg), c (Ns/m), k (N/m)
-                self.params = Variable(torch.Tensor((1.0, 0, (4*np.pi)**2)))
+                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2)))
             else:
                 # m (kg), c (Ns/m), k (N/m), zeta, wn (rad/s)
-                self.params = Variable(torch.Tensor((1.0, 0, (4*np.pi)**2, 0, np.sqrt((4*np.pi)**2/1.0))))
+                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2, 0, np.sqrt((2*np.pi)**2/1.0))))
         else:
             self.params = params
 
@@ -73,10 +73,10 @@ class MassSpringDamperDx(nn.Module):
         assert len(self.params) == 3 if simple else 5
 
         # The goal state is to displace the mass by 1m and stop there (0 velocity)
-        self.goal_state = torch.Tensor([1., 0.])
+        self.goal_state = torch.Tensor([1.0, 0.])
         
         # The velocity and displacement are penalized equally
-        self.goal_weights = torch.Tensor([1., 1.])
+        self.goal_weights = torch.Tensor([1.0, 1.0])
         
         # And control is penalized at 1/1000 of that value
         self.ctrl_penalty = 0.001
@@ -124,8 +124,8 @@ class MassSpringDamperDx(nn.Module):
         else:
             m, c, k, zeta, wn = torch.unbind(self.params)
 
-        # limit the control input to +/- max_force
-        u = torch.clamp(u, -self.max_force, self.max_force)[:,0]
+        # limit the control input to the lower and upper limits
+        u = torch.clamp(u, self.lower, self.upper)[:,0]
 
         # Get the current states from the tensor
         x, x_dot = torch.unbind(x, dim=1)
