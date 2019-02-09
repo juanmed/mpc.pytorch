@@ -1,23 +1,32 @@
 #! /usr/bin/env python
 
 ###############################################################################
-# mass_spring_damper.py
+# mass_spring_damper_usingODEsolver.py
 #
-# Simple mass-spring-damper example environment for use with mpc.pytorch
+# Simple mass-spring-damper example environment for use with mpc.pytorch. This
+# version using the scipy ODE solver solve_ivp to solve the equations of motion
+# for each timestep. 
+#
+# NOTE: As of 02/09/19, it does not work with grad_method=GradMethods.AUTO_DIFF
+#       but does with grad_method=GradMethods.FINITE_DIFF in the MPC.mpc call. The naive 
+#       finite differences solution is *sloooow*. 
 #
 # NOTE: Any plotting is set up for output, not viewing on screen.
 #       So, it will likely be ugly on screen. The saved PDFs should look
 #       better.
 #
-# Created: ~02/06/19
-#   * Ben Armentor - bma8468@louisiana.edu
+# Created: 02/09/19
+#   - Joshua Vaughan
+#   - joshua.vaughan@louisiana.edu
+#   - http://www.ucs.louisiana.edu/~jev9637
 #
 # Modified:
-#   * 02/09/19 - Joshua Vaughan - joshua.vaughan@louisiana.edu
-#       - Added additional commenting
+#   * 
 #
 # TODO:
-#   * 
+#   * 02/09/19 - JEV
+#       - Extend this method to batch sizes >1
+#       - Get the AUTODIFF version working
 ###############################################################################
 
 import torch
@@ -27,6 +36,7 @@ from torch import nn
 from torch.nn.parameter import Parameter
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
 from mpc import util
 
@@ -44,7 +54,6 @@ import matplotlib.patches as mpatches
 class MassSpringDamperDx(nn.Module):
     def __init__(self, params=None, simple=True):
         super().__init__()
-        self.simple = simple
         
         # Define the timestep size for the simulation (s)
         self.dt = 0.05
@@ -60,12 +69,8 @@ class MassSpringDamperDx(nn.Module):
         self.max_force = 20.0
 
         if params is None:
-            if simple:
-                # m (kg), c (Ns/m), k (N/m)
-                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2)))
-            else:
-                # m (kg), c (Ns/m), k (N/m), zeta, wn (rad/s)
-                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2, 0, np.sqrt((2*np.pi)**2/1.0))))
+            # m (kg), c (Ns/m), k (N/m)
+            self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2)))
         else:
             self.params = params
 
@@ -87,6 +92,27 @@ class MassSpringDamperDx(nn.Module):
         self.mpc_eps = 1e-3
         self.linesearch_decay = 0.2
         self.max_linesearch_iter = 5
+
+
+    def eq_of_motion(self, t, w, current_input):
+        """
+        Defines the differential equations for the coupled spring-mass system.
+
+        Arguments:
+            w :  vector of the state variables:
+            t :  time
+        """
+    
+        x = w[0]
+        x_dot = w[1]
+    
+        # Unpack the system parameters
+        m, c, k = torch.unbind(self.params)
+
+        # Create sysODE = (x', x_dot')
+        sysODE = np.array([x_dot,
+                           -k/m * x + -c/m * x_dot - current_input/m])
+        return sysODE
 
 
     def forward(self, x, u):
@@ -119,34 +145,39 @@ class MassSpringDamperDx(nn.Module):
         if x.is_cuda and not self.params.is_cuda:
             self.params = self.params.cuda()
 
-        if not hasattr(self, 'simple') or self.simple:
-            m, c, k = torch.unbind(self.params)
-        else:
-            m, c, k, zeta, wn = torch.unbind(self.params)
+        # Unpack the system parameters
+        m, c, k = torch.unbind(self.params)
 
         # limit the control input to the lower and upper limits
-        u = torch.clamp(u, self.lower, self.upper)[:,0]
+        current_input = torch.clamp(u, self.lower, self.upper)[:,0]
 
         # Get the current states from the tensor
         x, x_dot = torch.unbind(x, dim=1)
-
-        # Update the velocity
-        if not hasattr(self, 'simple') or self.simple:
-            # (Force - Damping - Spring)/Mass = x_Double_Dot
-            x_dot = x_dot + self.dt * ((u - c * x_dot - k * x)/m)
-
-        # Then, update the position
-        x = x + self.dt * x_dot
         
-        # And, stack them back into the state tensor for return
-        state = torch.stack((x, x_dot), dim=1)
+        x0 = [x, x_dot]
+
+        # Call the ODE solver for one timestep 
+        # Using the lambda function allows us to pass parameters to eq_of_motion
+        solution = solve_ivp(fun=lambda t, w: self.eq_of_motion(t, w, current_input), 
+                             t_span=[0, self.dt], 
+                             y0=x0, 
+                             #dense_output=True,
+                             #t_eval=t, 
+#                            max_step=max_step, 
+#                            atol=abserr, 
+#                            rtol=relerr
+                             )
+
+        # Get the last time step of the solution, which is one time-step
+        x = solution.y[0][-1]
+        x_dot = solution.y[1][-1]
+        
+        # Convert the states back into a torch tensor
+        state = torch.from_numpy(np.array([[x, x_dot]])).float()
 
         if squeeze:
             state = state.squeeze(0)
-        
-        print(type(state))
-        print(state)
-            
+
         return state
 
 

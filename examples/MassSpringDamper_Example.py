@@ -37,12 +37,19 @@ from torch.nn.parameter import Parameter
 # When in development, I recommend that latter. 
 # You can do this can keep the file in the examples subfolder by using the command:
 #  run /examples/MassSpringDamper_Example.py in IPython
-#    or
-#  python /examples/MassSpringDamper_Example.py from a normal terminal prompt
 from mpc import util
 from mpc import mpc
 from mpc.mpc import QuadCost, LinDx, GradMethods
-from mpc.env_dx.mass_spring_damper import MassSpringDamperDx
+
+
+#----- Comment one of these import lines out to 
+#
+# Choose to use the MassSpringDamperDx that has an ODE solver
+from mpc.env_dx.mass_spring_damper_usingODEsolver import MassSpringDamperDx
+#
+# or the simple approximation
+# from mpc.env_dx.mass_spring_damper import MassSpringDamperDx
+# ----- 
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -174,7 +181,7 @@ if __name__ == '__main__':
             detach_unconverged=False,
             linesearch_decay=dx.linesearch_decay,
             max_linesearch_iter=dx.max_linesearch_iter,
-            grad_method=GradMethods.AUTO_DIFF,
+            grad_method=GradMethods.FINITE_DIFF, #AUTO_DIFF,
             eps=1e-2,
         )(x, QuadCost(Q, p), dx)
         
