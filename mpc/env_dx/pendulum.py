@@ -59,12 +59,12 @@ class PendulumDx(nn.Module):
             if simple:
                 # gravity (g), mass (m), length (l)
                 # TODO: 02/06/19 - make m and l parameters variables
-                self.params = Variable(torch.Tensor((10., 1., 1.)))
+                self.params = Variable(torch.Tensor((9.81, 1., 1.)))
             else:
                 # gravity (g), mass (m), length (l), damping (d), gravity bias (b)
                 # TODO: 02/06/19 - JEV - make parameters variables
                 #                        What do they mean by gravity bias?
-                self.params = Variable(torch.Tensor((10., 1., 1., 0., 0.)))
+                self.params = Variable(torch.Tensor((9.81, 1., 1., 0., 0.)))
         else:
             self.params = params
 
@@ -190,6 +190,8 @@ class PendulumDx(nn.Module):
 if __name__ == '__main__':
     dx = PendulumDx()
     n_batch, T = 8, 50
+    
+    # Set up the initial conditions
     u = torch.zeros(T, n_batch, dx.n_ctrl)
     xinit = torch.zeros(n_batch, dx.n_state)
     xinit[:,0] = np.cos(0)
@@ -197,11 +199,19 @@ if __name__ == '__main__':
     x = xinit
     
     for t in range(T):
+        # Calling the module causes the function forward to be called, while
+        # taking care of running registered hooks. See:
+        # https://pytorch.org/docs/stable/nn.html#torch.nn.Module.forward
         x = dx(x, u[t])
+        
+        # Just get a frame to include in the video and save it as a png
+        # We would generally want to save the state information in numpy arrays
+        # to use for later plotting.
         fig, ax = dx.get_frame(x[0])
         fig.savefig('{:03d}.png'.format(t))
         plt.close(fig)
 
+    # Create a video using ffmpeg from the framed saved as png
     vid_file = 'pendulum_vid.mp4'
     if os.path.exists(vid_file):
         os.remove(vid_file)
@@ -212,5 +222,6 @@ if __name__ == '__main__':
     )
     os.system(cmd)
     
+    # Now, delete all the png files
     for t in range(T):
         os.remove('{:03d}.png'.format(t))
