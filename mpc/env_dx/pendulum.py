@@ -82,10 +82,8 @@ class PendulumDx(nn.Module):
         # Penalty on input magnitude
         self.ctrl_penalty = 0.001
         
-        # Upper and lower limits on inputs
-        # TODO: 02/06/19 - JEV - Should this be +/- self.max_torque?
-        #                        They seem to not be used elsewhere. Can we delete?
-        self.lower, self.upper = -2., 2.
+        # Upper and lower limits on inputs. Will be used in the call to the MPC solver.
+        self.lower, self.upper = -self.max_torque, self.max_torque
 
         self.mpc_eps = 1e-3
         self.linesearch_decay = 0.2
@@ -129,8 +127,8 @@ class PendulumDx(nn.Module):
         else:
             g, m, l, d, b = torch.unbind(self.params)
 
-        # Limit the control input inside the +/- self.max_torque bounds
-        u_clamped = torch.clamp(u, -self.max_torque, self.max_torque)[:,0]
+        # Limit the control input inside the torque bounds
+        u_clamped = torch.clamp(u, self.lower, self.upper)[:,0]
         
         # Parse out the states from the current state vector
         cos_th, sin_th, dth = torch.unbind(x, dim=1)
@@ -189,7 +187,6 @@ class PendulumDx(nn.Module):
         px = -torch.sqrt(self.goal_weights)*self.goal_state #+ self.mpc_lin
         p = torch.cat((px, torch.zeros(self.n_ctrl)))
         return Variable(q), Variable(p)
-
 
 if __name__ == '__main__':
     dx = PendulumDx()
