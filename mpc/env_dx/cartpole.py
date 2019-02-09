@@ -229,7 +229,7 @@ if __name__ == '__main__':
         
         # Save a png of the current timestep
         fig, ax = dx.get_frame(x[0])
-        fig.savefig('{:03d}.png'.format(t), dpi=300)
+        fig.savefig('cartpole{:03d}.png'.format(t), dpi=300)
         plt.close(fig)
 
     # Now use the ffmpeg to create a video from those pngs
@@ -237,7 +237,7 @@ if __name__ == '__main__':
     if os.path.exists(vid_file):
         os.remove(vid_file)
     cmd = ('{} -loglevel quiet '
-            '-r 20 -f image2 -i %03d.png -vcodec '
+            '-r 20 -f image2 -i cartpole%03d.png -vcodec '
             'libx264 -crf 25 -pix_fmt yuv420p {}').format(
         FFMPEG_BIN,
         vid_file
@@ -246,4 +246,4 @@ if __name__ == '__main__':
     
     # Then, delete the pngs
     for t in range(T):
-        os.remove('{:03d}.png'.format(t))
+        os.remove('cartpole{:03d}.png'.format(t))
