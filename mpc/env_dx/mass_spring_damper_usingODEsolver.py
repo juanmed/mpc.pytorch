@@ -109,9 +109,17 @@ class MassSpringDamperDx(nn.Module):
         # Unpack the system parameters
         m, c, k = torch.unbind(self.params)
 
+        # TODO: 02/09/19 - JEV - Should we ensure that these aren't tensors anymore?
+        # m = m.detach().numpy()
+        # c = c.detach().numpy()
+        # k = k.detach().numpy()
+        # current_input = current_input.detach().numpy()
+        #breakpoint()
+
         # Create sysODE = (x', x_dot')
         sysODE = np.array([x_dot,
                            -k/m * x + -c/m * x_dot - current_input/m])
+
         return sysODE
 
 
@@ -169,11 +177,13 @@ class MassSpringDamperDx(nn.Module):
                              )
 
         # Get the last time step of the solution, which is one time-step
+
         x = solution.y[0][-1]
         x_dot = solution.y[1][-1]
         
         # Convert the states back into a torch tensor
-        state = torch.from_numpy(np.array([[x, x_dot]])).float()
+        #state = torch.from_numpy(np.array([[x_resp, x_dot_resp]])).float()
+        state = torch.Tensor([[x, x_dot]])
 
         if squeeze:
             state = state.squeeze(0)

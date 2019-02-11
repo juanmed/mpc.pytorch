@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 
 ###############################################################################
-# PendulumExample.py
+# MassSpringDamper_Example.py
 #
-# Largely a script version of the Jupyter Notebook provided as an example in the source 
-# repository.
+# Largely based around the Jupyter Notebook for a pendulum provided as an example 
+# in the source repository.
 #
 # NOTE: Any plotting is set up for output, not viewing on screen.
 #       So, it will likely be ugly on screen. The saved PDFs should look
@@ -181,7 +181,7 @@ if __name__ == '__main__':
             detach_unconverged=False,
             linesearch_decay=dx.linesearch_decay,
             max_linesearch_iter=dx.max_linesearch_iter,
-            grad_method=GradMethods.FINITE_DIFF, #AUTO_DIFF,
+            grad_method=GradMethods.AUTO_DIFF, # FINITE_DIFF,
             eps=1e-2,
         )(x, QuadCost(Q, p), dx)
         

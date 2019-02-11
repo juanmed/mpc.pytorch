@@ -143,9 +143,6 @@ class MassSpringDamperDx(nn.Module):
 
         if squeeze:
             state = state.squeeze(0)
-        
-        print(type(state))
-        print(state)
             
         return state
 
