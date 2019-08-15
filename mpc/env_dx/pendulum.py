@@ -59,12 +59,12 @@ class PendulumDx(nn.Module):
             if simple:
                 # gravity (g), mass (m), length (l)
                 # TODO: 02/06/19 - make m and l parameters variables
-                self.params = Variable(torch.Tensor((9.81, 1., 1.)))
+                self.params = Variable(torch.Tensor((9.81, 1.0, 1.0)))
             else:
                 # gravity (g), mass (m), length (l), damping (d), gravity bias (b)
                 # TODO: 02/06/19 - JEV - make parameters variables
                 #                        What do they mean by gravity bias?
-                self.params = Variable(torch.Tensor((9.81, 1., 1., 0., 0.)))
+                self.params = Variable(torch.Tensor((9.81, 1.0, 1.0, 0.0, 0.0)))
         else:
             self.params = params
 
@@ -74,10 +74,10 @@ class PendulumDx(nn.Module):
         #    cos(theta) = 1, theta = n*pi
         #    sin(theta) = 0, theta = n*pi
         #    theta_dot = 0
-        self.goal_state = torch.Tensor([1., 0., 0.])        
+        self.goal_state = torch.Tensor([1.0, 0.0, 0.0])        
 
         # Equal weighting on two position states and 1/10 of that on velocity
-        self.goal_weights = torch.Tensor([1., 1., 0.1])
+        self.goal_weights = torch.Tensor([1.0, 1.0, 0.1])
         
         # Penalty on input magnitude
         self.ctrl_penalty = 0.001
@@ -102,7 +102,7 @@ class PendulumDx(nn.Module):
           Updated state vector as pytorch tensor
         """
         
-        squeeze = x.ndimension() == 1
+        squeeze = (x.ndimension() == 1)
 
         if squeeze:
             x = x.unsqueeze(0)
@@ -134,10 +134,10 @@ class PendulumDx(nn.Module):
         cos_th, sin_th, dth = torch.unbind(x, dim=1)
         th = torch.atan2(sin_th, cos_th)
         
-        # TODO: 02/06/19 - JEV - What odes the 3 in these equations come from? <- they are using rigid bar, not point mass  
+        # Note: These equations of motions are for rigid bar pendulum, not point mass  
         if not hasattr(self, 'simple') or self.simple:
             # simple inverted pendulum
-            newdth = dth + self.dt*(-3.*g/(2.*l) * (-sin_th) + 3. * u_clamped / (m*l**2))
+            newdth = dth + self.dt * (-3.0 * g / (2.0 * l) * (-sin_th) + 3.0 * u_clamped / (m * l**2))
 
         else: 
             # Include damping and gravity bias
@@ -147,7 +147,7 @@ class PendulumDx(nn.Module):
 
         # Use the calculated theta_dot to calculate the new theta
         # theta = old_theta + theta_dot * dt
-        newth = th + newdth*self.dt
+        newth = th + newdth * self.dt
         
         # Pack the new states
         state = torch.stack((torch.cos(newth), torch.sin(newth), newdth), dim=1)
@@ -181,7 +181,7 @@ class PendulumDx(nn.Module):
     def get_true_obj(self):
         q = torch.cat((
             self.goal_weights,
-            self.ctrl_penalty*torch.ones(self.n_ctrl)
+            self.ctrl_penalty * torch.ones(self.n_ctrl)
         ))
         assert not hasattr(self, 'mpc_lin')
         px = -torch.sqrt(self.goal_weights)*self.goal_state #+ self.mpc_lin
