@@ -48,7 +48,7 @@ from mpc.mpc import QuadCost, LinDx, GradMethods
 # from mpc.env_dx.mass_spring_damper_usingODEsolver import MassSpringDamperDx
 #
 # or the simple approximation
-from mpc.env_dx.mass_spring_damper import MassSpringDamperDx
+from mpc.env_dx.two_mass_spring_damper import TwoMassSpringDamperDx
 
 
 import numpy as np
@@ -58,20 +58,17 @@ from tqdm import tqdm
 
 
 if __name__ == '__main__':
-    m = 1.0                     # mass (kg)
-    k = (2*np.pi)**2            # spring constant - (2*pi)^2 rad/s results in 1 Hz natural freq
-    wn = np.sqrt(k / m)         # Define the natural frequency
-
-    # Select damping ratio and use it to choose an appropriate c
-    zeta = 0.00                 # damping ratio
-    c = 2 * zeta * wn * m       # damping coeff.
+    m1 = 1.0                    # mass (kg)
+    m2 = 1.0                    # mass (kg)
+    k = (2*np.pi)**2            # spring constant (N/m)
+    c = 0.5                     # damping coeff. (N/m/s)
 
     # Packing system parameters into a tensor
-    params = torch.Tensor((m, c, k))
+    params = torch.Tensor((m1, m2, c, k))
     
     # Create an instance of the MassSpringDamperDx object. 
     # See the file mass_spring_damper.py in env_dx for details on this class.
-    dx = MassSpringDamperDx(params, simple=True)
+    dx = TwoMassSpringDamperDx(params)
     
     # You can adjust the upper and lower limits on torque below to see how they effect
     # the solution. For this example, you'll see that the solutions will sometimes not
@@ -84,8 +81,8 @@ if __name__ == '__main__':
 
     # Parameters needed for the solution procedure
     n_batch = 1     # Number of batches to run
-    T = 500         # Number of time steps to simulate/solve over
-    mpc_T = 20      # Number of time steps in the MPC prediction horizon
+    T = 250         # Number of time steps to simulate/solve over
+    mpc_T = 100     # Number of time steps in the MPC prediction horizon
 
     def uniform(shape, low, high):
         """ Defines a uniform distribution of random numbers 
@@ -106,9 +103,11 @@ if __name__ == '__main__':
     # Define initial conditions for the simulation, using a uniform random distribution
     x = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
     x_dot = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
+    y = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
+    y_dot = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
     
     # Stack the state initial conditions into a PyTorch tensor
-    x_init = torch.stack((x, x_dot), dim=1)
+    x_init = torch.stack((x, x_dot, y, y_dot), dim=1)
 
     x = x_init
     u_init = None
@@ -118,15 +117,15 @@ if __name__ == '__main__':
     #
     # These would be values to "play" with to develop some intuition about how 
     # to design cost functions, etc.
-    goal_weights = torch.Tensor((0.7, 1.0e-3))
+    goal_weights = torch.Tensor((1.0, 1.0e-1, 1.0, 1.0e-1))
 
-    # The desired state is 0.5m displacement of the mass.
+    # The desired state is 0.5m displacement of the masses.
     # Goal is:
     #    x = 0.5
     #    x_dot = 0
     goal_position = 0.5     # m
     goal_velocity = 0.0     # m/s
-    goal_state = torch.Tensor((goal_position, goal_velocity))
+    goal_state = torch.Tensor((goal_position, goal_velocity, goal_position, goal_velocity))
 
     # The penalty on control is 1/1000000 of that on the displacement terms of the state
     # vector. This would be another value to "play" with to understand the 
@@ -165,6 +164,7 @@ if __name__ == '__main__':
     # Now, we actually solve over T number of timesteps
     # tqdm just gives us a nice progress meter of the solution loop
     for timestep in tqdm(range(T)):
+#     for timestep in range(T): # Using this instead of above makes watching verbose much better
         # Each call to the MPC solver returns the state history, the control history (actions),
         # and value of the objective function for the solution over the mpc_T number of 
         # timesteps.
@@ -175,7 +175,7 @@ if __name__ == '__main__':
             u_init=u_init,          # Initial guess for inputs
             u_lower=dx.lower,       # Lower limit on inputs
             u_upper=dx.upper,       # Upper limit on inputs
-            lqr_iter=100,            # Number of iterations per LQR solution step
+            lqr_iter=10,            # Number of iterations per LQR solution step
             verbose=0,              # Verbosity, 0 is just warnings. 1 will give more info
             exit_unconverged=False,
             detach_unconverged=False,
@@ -235,22 +235,23 @@ if __name__ == '__main__':
     plt.xlabel('Time (s)', fontsize=22, weight='bold', labelpad=5)
     plt.ylabel('Position (m)', fontsize=22, weight='bold', labelpad=10)
  
-    plt.plot(time, response[:,0], linewidth=2, linestyle='-', label=r'Angle')
+    plt.plot(time, response[:,0], linewidth=2, linestyle='-', label=r'$m_1$')
+    plt.plot(time, response[:,2], linewidth=2, linestyle='--', label=r'$m_2$')
 
     # uncomment below and set limits if needed
     # plt.xlim(0,5)
     # plt.ylim(0,10)
 
     # Create the legend, then fix the fontsize
-    # leg = plt.legend(loc='upper right', ncol = 1, fancybox=True)
-    # ltext  = leg.get_texts()
-    # plt.setp(ltext,fontsize=18)
+    leg = plt.legend(loc='upper right', ncol = 1, fancybox=True)
+    ltext  = leg.get_texts()
+    plt.setp(ltext,fontsize=18)
 
     # Adjust the page layout filling the page using the new tight_layout command
     plt.tight_layout(pad=0.5)
 
     # save the figure as a high-res pdf in the current folder
-    plt.savefig('MassSpringDamper_MPC_PositionResponse.pdf')
+    plt.savefig('TwoMassSpringDamper_MPC_PositionResponse.pdf')
 
     # show the figure
     # plt.show()
@@ -294,7 +295,7 @@ if __name__ == '__main__':
     plt.tight_layout(pad=0.5)
 
     # save the figure as a high-res pdf in the current folder
-    plt.savefig('MassSpringDamper_MPC_ControlInput.pdf')
+    plt.savefig('TwoMassSpringDamper_MPC_ControlInput.pdf')
 
     # show the figure
     # plt.show()

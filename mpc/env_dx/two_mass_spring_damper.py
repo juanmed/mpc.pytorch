@@ -1,20 +1,18 @@
 #! /usr/bin/env python
 
 ###############################################################################
-# mass_spring_damper.py
+# two_mass_spring_damper.py
 #
-# Simple mass-spring-damper example environment for use with mpc.pytorch
+# Simple two mass-spring-damper example environment for use with mpc.pytorch
 #
 # NOTE: Any plotting is set up for output, not viewing on screen.
 #       So, it will likely be ugly on screen. The saved PDFs should look
 #       better.
 #
-# Created: ~02/06/19
-#   * Ben Armentor - bma8468@louisiana.edu
+# Created: 08/16/19
 #
 # Modified:
-#   * 02/09/19 - Joshua Vaughan - joshua.vaughan@louisiana.edu
-#       - Added additional commenting
+#   * 
 #
 # TODO:
 #   * 
@@ -41,16 +39,16 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
-class MassSpringDamperDx(nn.Module):
+class TwoMassSpringDamperDx(nn.Module):
     def __init__(self, params=None, simple=True):
         super().__init__()
         self.simple = simple
         
         # Define the timestep size for the simulation (s)
-        self.dt = 0.01
+        self.dt = 0.02
         
         # Define the number of states. Here they are x and x_dot
-        self.n_state = 2
+        self.n_state = 4
         
         # Define the number of control inputs. Here, there is only the force on the mass
         self.n_ctrl = 1
@@ -60,23 +58,16 @@ class MassSpringDamperDx(nn.Module):
         self.max_force = 20.0
 
         if params is None:
-            if simple:
-                # m (kg), c (Ns/m), k (N/m)
-                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2)))
-            else:
-                # m (kg), c (Ns/m), k (N/m), zeta, wn (rad/s)
-                self.params = Variable(torch.Tensor((1.0, 0, (2*np.pi)**2, 0, np.sqrt((2*np.pi)**2/1.0))))
+            # m (kg), c (Ns/m), k (N/m)
+            self.params = Variable(torch.Tensor((1.0, 1.0, 0, (2*np.pi)**2)))
         else:
             self.params = params
 
-        # Check that we have the correct number of parameters
-        assert len(self.params) == 3 if simple else 5
-
         # The goal state is to displace the mass by 1m and stop there (0 velocity)
-        self.goal_state = torch.Tensor([1.0, 0.])
+        self.goal_state = torch.Tensor([1.0, 0.0, 1.0, 0.0])
         
         # The velocity and displacement are penalized equally
-        self.goal_weights = torch.Tensor([1.0, 1.0])
+        self.goal_weights = torch.Tensor([1.0, 1.0, 1.0, 1.0])
         
         # And control is penalized at 1/1000 of that value
         self.ctrl_penalty = 0.001
@@ -111,7 +102,7 @@ class MassSpringDamperDx(nn.Module):
         # Check the all the dimensions are correct, raise an AssertionError if not
         assert x.ndimension() == 2
         assert x.shape[0] == u.shape[0]
-        assert x.shape[1] == 2
+        assert x.shape[1] == 4
         assert u.shape[1] == 1
         assert u.ndimension() == 2
 
@@ -119,31 +110,28 @@ class MassSpringDamperDx(nn.Module):
         if x.is_cuda and not self.params.is_cuda:
             self.params = self.params.cuda()
 
-        if not hasattr(self, 'simple') or self.simple:
-            m, c, k = torch.unbind(self.params)
-        else:
-            m, c, k, zeta, wn = torch.unbind(self.params)
+        m1, m2, c, k = torch.unbind(self.params)
 
         # limit the control input to the lower and upper limits
         u = torch.clamp(u, self.lower, self.upper)[:,0]
 
         # Get the current states from the tensor
-        x, x_dot = torch.unbind(x, dim=1)
+        x, x_dot, y, y_dot = torch.unbind(x, dim=1)
 
-        # Update the velocity
-        if not hasattr(self, 'simple') or self.simple:
-            # (Force - Damping - Spring)/Mass = x_Double_Dot
-            x_dot = x_dot + self.dt * ((u - c * x_dot - k * x)/m)
+        # Update the velocities
+        x_dot = x_dot + self.dt * (u + c * (y_dot - x_dot) + k * (y - x))/m1
+        y_dot = y_dot + self.dt * (-c * (y_dot - x_dot) - k * (y - x))/m2
 
-        # Then, update the position
+        # Then, update the positions
         x = x + self.dt * x_dot
+        y = y + self.dt * y_dot
         
         # And, stack them back into the state tensor for return
-        state = torch.stack((x, x_dot), dim=1)
+        state = torch.stack((x, x_dot, y, y_dot), dim=1)
 
         if squeeze:
             state = state.squeeze(0)
-            
+
         return state
 
 
@@ -155,7 +143,7 @@ class MassSpringDamperDx(nn.Module):
         assert len(state) == 2
         
         # Parse the current states from the state tensor
-        x, x_dot = torch.unbind(state)
+        x, x_dot, y, y_dot = torch.unbind(state)
         
         fig, ax = plt.subplots(figsize=(6, 4), dpi=300)
         plt.axis('equal') # This will make the distances represented on the axes equal
@@ -173,18 +161,14 @@ class MassSpringDamperDx(nn.Module):
 if __name__ == '__main__':
 
     # Define the parameters for simluation
-    m = 1.0                      # mass (kg)
+    m1 = 1.0                     # mass (kg)
+    m2 = 1.0                     # mass (kg)
     k = (2*2*np.pi)**2           # spring constant (N/m)
-
-    wn = np.sqrt(k/m)            # natural frequency (rad/s)
-
-    # Select damping ratio and use it to choose an appropriate c
-    zeta = 0.05                   # damping ratio
-    c = 2*zeta*wn*m               # damping coeff.
+    c = 0.2                      # damping coeff.
 
     # Packing system parameters into a tensor
-    params = torch.Tensor((m, c, k))
-    dx = MassSpringDamperDx(params, simple=True)
+    params = torch.Tensor((m1, m2, c, k))
+    dx = MassSpringDamperDx(params)
 
     n_batch, T = 1, 100
 

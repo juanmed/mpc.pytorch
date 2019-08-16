@@ -13,7 +13,7 @@ def pnqp(H, q, lower, upper, x_init=None, n_iter=20):
 
     if x_init is None:
         if n == 1:
-            x_init = -(1./H.squeeze(2))*q
+            x_init = -(1.0 / H.squeeze(2)) * q
         else:
             H_lu = H.btrifact()
             x_init = -q.btrisolve(*H_lu) # Clamped in the x assignment.
@@ -28,7 +28,7 @@ def pnqp(H, q, lower, upper, x_init=None, n_iter=20):
     for i in range(n_iter):
         g = util.bmv(H, x) + q
         Ic = ((x == lower) & (g > 0)) | ((x == upper) & (g < 0))
-        If = 1-Ic
+        If = 1 - Ic
 
         if If.is_cuda:
             Hff_I = util.bger(If.float(), If.float()).type_as(If)
