@@ -33,7 +33,7 @@ from torch import nn
 from torch.nn.parameter import Parameter
 
 # Note: These imports assume that the mpc.pytorch library is installed in your path or
-# this file is either being run from the main mpc.pytorch folder 
+# this file is being run from the main mpc.pytorch folder 
 # When in development, I recommend that latter. 
 # You can do this can keep the file in the examples subfolder by using the command:
 #  run /examples/PendulumExample.py in IPython
@@ -172,7 +172,7 @@ if __name__ == '__main__':
             u_init=u_init,          # Initial guess for inputs
             u_lower=dx.lower,       # Lower limit on inputs
             u_upper=dx.upper,       # Upper limit on inputs
-            lqr_iter=50,            # Number of iterations per LQR solution step
+            lqr_iter=50,            # Max number of iterations per LQR solution step
             verbose=0,              # Verbosity, 0 is just warnings. 1 will give more info
             exit_unconverged=False,
             detach_unconverged=False,
