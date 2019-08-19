@@ -82,29 +82,14 @@ if __name__ == '__main__':
     # Parameters needed for the solution procedure
     n_batch = 1     # Number of batches to run
     T = 250         # Number of time steps to simulate/solve over
-    mpc_T = 100     # Number of time steps in the MPC prediction horizon
-
-    def uniform(shape, low, high):
-        """ Defines a uniform distribution of random numbers 
-        
-        Arguments:
-          shaped : shape of desired tensor
-          low : minimum value to contain in the distribution
-          high : maximum value to contain in the distribution
-        """
-        
-        r = high-low
-        
-        return torch.rand(shape) * r + low
-
-
-    torch.manual_seed(0) # Seed the random number generator for repeatable results
+    mpc_T = 20      # Number of time steps in the MPC prediction horizon
     
-    # Define initial conditions for the simulation, using a uniform random distribution
-    x = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
-    x_dot = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
-    y = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
-    y_dot = torch.Tensor([0.0]) #uniform(n_batch, -1.0, 1.0)
+    # Define initial conditions for the simulation. Start at rest, so all 
+    # displacements and velocities are zero.
+    x = torch.Tensor([0.0]) 
+    x_dot = torch.Tensor([0.0]) 
+    y = torch.Tensor([0.0]) 
+    y_dot = torch.Tensor([0.0])
     
     # Stack the state initial conditions into a PyTorch tensor
     x_init = torch.stack((x, x_dot, y, y_dot), dim=1)
@@ -121,9 +106,11 @@ if __name__ == '__main__':
 
     # The desired state is 0.5m displacement of the masses.
     # Goal is:
-    #    x = 0.5
-    #    x_dot = 0
-    goal_position = 0.5     # m
+    #    x = 1.0
+    #    x_dot = 0.0
+    #    y = 1.0
+    #    y_dot = 0.0
+    goal_position = 1.0     # m
     goal_velocity = 0.0     # m/s
     goal_state = torch.Tensor((goal_position, goal_velocity, goal_position, goal_velocity))
 
@@ -135,7 +122,7 @@ if __name__ == '__main__':
     # because we need a steady-state force to reach our goal position. If we overly 
     # penalize force in the cost function, then that steady-state force will "cost" too
     # much to allow us to get near our goal position.
-    ctrl_penalty = 1.0e-9
+    ctrl_penalty = 1e-6
     
     q = torch.cat((
         goal_weights,
@@ -155,7 +142,7 @@ if __name__ == '__main__':
 
     # Set up NumPy arrays to allow us to plot the state and control history
     # We'll only grab the first of the batch for now. 
-    # TODO: 02/09/19 - JEV - Include others from the multi-batch solutions
+    # TODO:  - JEV - Include others from the multi-batch solutions
     response = np.zeros((T, dx.n_state))
     control_inputs = np.zeros((T, dx.n_ctrl))
     time = np.arange(0, T * dx.dt, dx.dt)
@@ -183,7 +170,7 @@ if __name__ == '__main__':
             linesearch_decay=dx.linesearch_decay,
             max_linesearch_iter=dx.max_linesearch_iter,
             grad_method=GradMethods.AUTO_DIFF, # FINITE_DIFF,
-            eps=1e-3,
+            eps=1e-7,
         )(x, QuadCost(Q, p), dx)
         
         # Save the first of the nominal actions determined by the MPC solution to use as 
@@ -218,8 +205,8 @@ if __name__ == '__main__':
     plt.subplots_adjust(bottom=0.17, left=0.17, top=0.96, right=0.96)
 
     # Change the axis units font
-    plt.setp(ax.get_ymajorticklabels(),fontsize=18)
-    plt.setp(ax.get_xmajorticklabels(),fontsize=18)
+    plt.setp(ax.get_ymajorticklabels(), fontsize=18)
+    plt.setp(ax.get_xmajorticklabels(), fontsize=18)
 
     ax.spines['right'].set_color('none')
     ax.spines['top'].set_color('none')
@@ -239,11 +226,11 @@ if __name__ == '__main__':
     plt.plot(time, response[:,2], linewidth=2, linestyle='--', label=r'$m_2$')
 
     # uncomment below and set limits if needed
-    # plt.xlim(0,5)
-    # plt.ylim(0,10)
+    # plt.xlim(0, 5)
+    plt.ylim(0, 1.25)
 
     # Create the legend, then fix the fontsize
-    leg = plt.legend(loc='upper right', ncol = 1, fancybox=True)
+    leg = plt.legend(loc='upper right', ncol = 2, fancybox=True)
     ltext  = leg.get_texts()
     plt.setp(ltext,fontsize=18)
 
@@ -263,8 +250,8 @@ if __name__ == '__main__':
     plt.subplots_adjust(bottom=0.17, left=0.17, top=0.96, right=0.96)
 
     # Change the axis units font
-    plt.setp(ax.get_ymajorticklabels(),fontsize=18)
-    plt.setp(ax.get_xmajorticklabels(),fontsize=18)
+    plt.setp(ax.get_ymajorticklabels(), fontsize=18)
+    plt.setp(ax.get_xmajorticklabels(), fontsize=18)
 
     ax.spines['right'].set_color('none')
     ax.spines['top'].set_color('none')
