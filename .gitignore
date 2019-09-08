@@ -1,7 +1,8 @@
 dist
 *-info
 *.mp4
-.mpc/
+.pytorchmpc/
 build/
 __pycache__
 .ipynb_checkpoints
+.pdf
