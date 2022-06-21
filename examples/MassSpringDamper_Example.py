@@ -49,7 +49,7 @@ from mpc.mpc import QuadCost, LinDx, GradMethods
 #
 # or the simple approximation
 from mpc.env_dx.mass_spring_damper import MassSpringDamperDx
-
+print(MassSpringDamperDx)
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # Parameters needed for the solution procedure
     n_batch = 1     # Number of batches to run
     T = 500         # Number of time steps to simulate/solve over
-    mpc_T = 20      # Number of time steps in the MPC prediction horizon
+    mpc_T = 10      # Number of time steps in the MPC prediction horizon
 
     def uniform(shape, low, high):
         """ Defines a uniform distribution of random numbers 
@@ -108,9 +108,10 @@ if __name__ == '__main__':
     x = torch.Tensor([0.0]).to(device) #uniform(n_batch, -1.0, 1.0)
     x_dot = torch.Tensor([0.0]).to(device) #uniform(n_batch, -1.0, 1.0)
     
+
     # Stack the state initial conditions into a PyTorch tensor
     x_init = torch.stack((x, x_dot), dim=1)
-
+    print("x_init",x_init,x_init.shape,x_init.ndimension())
     x = x_init
     u_init = None
 
@@ -203,9 +204,10 @@ if __name__ == '__main__':
         #   https://pytorch.org/docs/stable/nn.html#torch.nn.Module.forward
         # For the system here, the equations of motion are run in the forward
         # pass, so this basically just updates the states for the next timestep.
-        print("x is cuda {}".format(x.is_cuda))
+        #print("x is cuda {}".format(x.is_cuda))
         x = dx(x, next_action)
-        
+        print("state",x,x.shape,x.ndimension())
+
         # TODO: 02/09/19 -JEV - update to get more than just the first batch's solution
         response[timestep,:] = x[0].detach().cpu().numpy()
         control_inputs[timestep,:] = next_action[0].detach().cpu().numpy()
